@@ -1,0 +1,88 @@
+#Gradle version check for CI issues
+#Copilot Chat
+#Gradle version check for CI issues
+#Ayandashaun/andmx workflow run
+#Help resolve the error in the build.yml actions:
+
+##Using results of get file and 3 other tool calls
+
+##Workflow run 41528154872 in andmx
+##I’m checking the Gradle versions and the workflow mismatch to isolate what is actually breaking in CI.
+
+
+##View file gradle/libs.versions.toml
+
+##Workflow run 41528154872 in Ayandashaun/andmx
+
+##create_or_update_file
+##I’m waiting for your confirmation to proceed with the fix.
+
+## Ayandashaun accepted the action
+
+##create_or_update_file
+##The root cause is in the workflow, not in the app code:
+
+##The build fails while configuring the Android project because the required NDK package is missing:
+##com.android.builder.sdk.InstallFailedException
+##ndk;27.0.12077973 NDK (Side by side) 27.0.12077973
+##In app/build.gradle.kts, the app explicitly sets:
+##ndkVersion = "27.0.12077973"
+##So CI must install that NDK before Gradle configures the project.
+##Also, the workflow is inconsistent with the repo:
+
+##It runs gradle assembleDebug instead of the wrapper (./gradlew)
+##It installs Gradle 9.3.1 explicitly while the project’s wrapper is for Gradle 8.7
+##It does not install required Android SDK packages (platforms;android-34, build-tools;34.0.0, ndk;27.0.12077973)
+##The fix is to make the workflow install the required Android SDK/NDK components and use the repo’s wrapper.
+
+##I attempted to patch the file, but I do not have write permission to this repository, so I cannot commit it from here. Please apply this change locally or in a branch you can push:
+
+##YAML**\
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;27.0.12077973"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: andmx
+          path: "**/build/outputs/apk/debug/*.apk"
+          if-no-files-found: error
